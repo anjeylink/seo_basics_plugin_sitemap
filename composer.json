@@ -13,6 +13,6 @@
     "typo3-ter/seo_basics_plugin_sitemap": "self.version"
   },
   "require": {
-    "typo3/cms": ">=8.0.0 <=8.9.99"
+    "typo3/cms": ">=7.6.0 <=8.9.99"
   }
 }

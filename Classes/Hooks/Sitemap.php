@@ -67,7 +67,14 @@ class Sitemap
         $plugins = GeneralUtility::removeDotsFromTS($this->frontendController->tmpl->setup['plugin.']['tx_seobasicspluginsitemap.']['extensions.']);
 
         foreach ($plugins as $plugin => $configuration) {
-            if (ExtensionManagementUtility::isLoaded($plugin)) {
+            //check if we have extName in typoscript or use the configuration root as extension name
+            if (isset($configuration['extName']) && $configuration['extName'] != ''){
+                $extName = $configuration['extName'];
+            } else {
+                $extName = $plugin;
+            }
+            if (ExtensionManagementUtility::isLoaded($extName)) {
+                $hreflangs = $configuration['languages'];
                 $where = !empty($configuration['where']) ? $configuration['where'] : '';
 
                 $enableFileds = $this->frontendController->cObj->enableFields($configuration['table']);
@@ -101,16 +108,67 @@ class Sitemap
                         $link = $this->frontendController->cObj->typoLink_URL($conf);
 
                         if ($row[$configuration['fields']['tstamp']]) {
-                            $lastmod = '
-		<lastmod>' . htmlspecialchars(date('c', $row[$configuration['fields']['tstamp']])) . '</lastmod>';
+                            $lastmod = '<lastmod>' . htmlspecialchars(date('c', $row[$configuration['fields']['tstamp']])) . '</lastmod>';
                         } else {
                             $lastmod = '';
                         }
 
-                        $params['content'] .= '
-	<url>
-		<loc>' . htmlspecialchars($link) . '</loc>' . $lastmod . '
-	</url>';
+                        $params['content'] .= '<url><loc>' . htmlspecialchars($link) . '</loc>' . $lastmod ;
+
+                        // if langues are added to typoscript configuration
+                        if (is_array($hreflangs) && count($hreflangs) > 0) {
+                            // check name of field for language parent id
+                            if (isset($configuration['fields']['l10n_parent']) && $configuration['fields']['l10n_parent'] != ''){
+                                $langParentField = $configuration['fields']['l10n_parent'];
+                            } else {
+                                $langParentField = 'l10n_parent';
+                            }
+
+                            // for all over languages from typoscript configuration
+                            foreach($hreflangs as $langKey => $hrefLang){
+                                // get configuration for rendering main URL
+                                $langConf = $conf;
+                                // add language parameter
+                                $langConf['additionalParams'] .= '&L=' . $langKey;
+
+                                // for non-default language - check if translated item exists
+                                if ($langKey > 0){
+                                    // check if [all languages] is not set for current record
+                                    $record = $this->dbConnection->exec_SELECTgetSingleRow(
+                                        'sys_language_uid',
+                                        $configuration['table'],
+                                        $configuration['where'] . ' AND uid=' . $row[$configuration['fields']['uid']]
+                                    );
+                                    // in that case we have an item
+                                    if ($record['sys_language_uid'] == -1){
+                                        $translationExists = true;
+                                    } else {
+                                        // the record is not for all languages so we checking for translation
+                                        $transItem = $this->dbConnection->exec_SELECTgetSingleRow(
+                                            'uid',
+                                            $configuration['table'],
+                                            $configuration['where'] . ' AND sys_language_uid=' . $langKey . ' AND ' . $langParentField . '=' . $row[$configuration['fields']['uid']] . ' AND hidden=0 AND deleted=0'
+                                        );
+                                        if (isset($transItem['uid']) && $transItem['uid'] > 0){
+                                            $translationExists = true;
+                                        } else {
+                                            $translationExists = false;
+                                        }
+                                    }
+                                } else {
+                                    //for language 0 we always have a link 
+                                    $translationExists = true;
+                                }
+
+                                // render a URL for translation if it exists
+                                if ($translationExists){
+                                    $link = $this->frontendController->cObj->typoLink_URL($langConf);    
+                                    $params['content'] .= '<xhtml:link rel="alternate" hreflang="' . $hrefLang . '" href="' . htmlspecialchars($link) . '" />';
+                                }
+
+                            }
+                        }
+                        $params['content'] .= '</url>';
                     }
                 }
             }

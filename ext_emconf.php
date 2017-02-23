@@ -31,7 +31,7 @@ $EM_CONF[$_EXTKEY] = [
 	'constraints' => [
 		'depends' => [
 			'typo3' => '7.6.0-8.9.99',
-            'seo_basics' => '>=0.9.6'
+            'seo_basics' => '>=0.9.2'
 		],
 		'conflicts' => [
 		],
